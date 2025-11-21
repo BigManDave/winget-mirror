@@ -221,41 +221,21 @@ downloads/
 
 ### NGINX Static File Hosting
 
-To serve the patched manifests and downloads via NGINX:
+A complete Docker Compose setup for hosting your winget mirror is provided in the `docker/` directory. This includes:
 
-1. **Host the patched manifests**: Copy the contents of your `--output-dir` to a web-accessible directory on your NGINX server.
+- **Modern NGINX**: Latest version with security hardening
+- **HTTPS Support**: Automatic SSL with self-signed certificates
+- **Performance Optimized**: Gzip, caching, and rate limiting
+- **Winget Compatible**: Proper CORS and directory indexing
 
-2. **Host the downloads folder**: Ensure your `downloads/` folder is also web-accessible at the same domain.
+**Quick Setup**:
+```bash
+cd docker
+./generate-ssl.sh
+docker-compose up -d
+```
 
-3. **NGINX Configuration Example**:
-   ```nginx
-   server {
-       listen 80;
-       server_name your-mirror-domain.com;
-
-       # Serve patched manifests
-       location /manifests/ {
-           alias /path/to/patched-manifests/manifests/;
-           autoindex on;  # Optional: enable directory listing
-       }
-
-       # Serve downloads
-       location /downloads/ {
-           alias /path/to/mirror/downloads/;
-           autoindex off;  # Disable directory listing for security
-       }
-
-       # Optional: Add caching headers
-       location ~* \.(exe|msi|zip)$ {
-           add_header Cache-Control "public, max-age=31536000";  # 1 year
-       }
-   }
-   ```
-
-4. **Winget Client Configuration**: Configure winget to use your mirror by setting the source URL to point to your manifests directory:
-   ```bash
-   winget source add --name "My Mirror" --arg "https://your-mirror-domain.com/manifests"
-   ```
+See `docker/README.md` for complete setup instructions and configuration options.
 
 ### Requirements
 
@@ -286,9 +266,10 @@ invoke sync Notepad++
 # 2. Patch manifests for your domain
 invoke patch-repo --server-url="https://winget.company.com" --output-dir="./patched"
 
-# 3. Deploy to NGINX
-# Copy ./patched/manifests/ to /var/www/winget/manifests/
-# Ensure ./downloads/ is accessible at /var/www/winget/downloads/
+# 3. Start NGINX server (see docker/README.md)
+cd ../docker
+./generate-ssl.sh
+docker-compose up -d
 
 # 4. Configure winget clients
 winget source add --name "Company Mirror" --arg "https://winget.company.com/manifests"

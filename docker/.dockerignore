@@ -1,0 +1,45 @@
+# Docker ignore file for winget mirror
+# This prevents copying unnecessary files into the NGINX container
+
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+venv
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Logs
+*.log
+
+# Test directories
+test-*
+scripts/
+
+# Documentation
+README.md
+*.md
+
+# Docker files (not needed inside container)
+docker-compose.yml
+Dockerfile*
+docker-compose.*.yml

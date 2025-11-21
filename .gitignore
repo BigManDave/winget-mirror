@@ -118,6 +118,9 @@ test-mirror/
 test-local/
 scripts/test-local/
 
+# Docker SSL certificates (regenerate with generate-ssl.sh)
+docker/ssl/
+
 # IDEs
 .vscode/
 .idea/
