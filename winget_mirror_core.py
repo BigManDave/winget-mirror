@@ -8,6 +8,7 @@ from pathlib import Path
 from git import Repo, RemoteProgress
 from tqdm import tqdm
 from packaging import version
+from packaging.version import Version, InvalidVersion
 
 class GitProgress(RemoteProgress):
     def update(self, op_code, cur_count, max_count=None, message=''):
@@ -20,15 +21,20 @@ def parse_version_safe(v):
     """Parse version string, handling non-PEP 440 versions like '1.2.40.592'."""
     try:
         return version.parse(v)
-    except version.InvalidVersion:
-        # Fallback: split by dots and convert to tuple of ints
+    except InvalidVersion:
+        # Fallback: convert to a dummy Version object
         parts = []
         for part in v.split('.'):
             try:
                 parts.append(int(part))
             except ValueError:
-                break  # Stop at first non-numeric part
-        return tuple(parts) if parts else (0,)
+                break
+        # Pad to at least 3 parts
+        while len(parts) < 3:
+            parts.append(0)
+        fallback_str = '.'.join(str(p) for p in parts)
+        return Version(fallback_str)
+
 
 def load_config_and_state():
     """Load and return config and state from files, or None if not found."""
