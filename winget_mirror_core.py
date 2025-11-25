@@ -133,20 +133,34 @@ def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo):
 
     downloaded_new = False
 
-    for installer in installers:
-        url = installer['InstallerUrl']
-        sha256 = installer.get('InstallerSha256')
-        filename = Path(url).name
-        filepath = download_dir / filename
+    # Select installer: prefer x64, fallback to x86
+    chosen_installer = None
+    for inst in installers:
+        if inst.get("Architecture") == "x64" and inst.get("InstallerUrl"):
+            chosen_installer = inst
+            break
+    if not chosen_installer:
+        for inst in installers:
+            if inst.get("Architecture") == "x86" and inst.get("InstallerUrl"):
+                chosen_installer = inst
+                break
 
-        if filepath.exists():
-            # File already exists, add to files if not already
-            if filename not in downloaded[package_id]['files']:
-                with open(filepath, 'rb') as f:
-                    computed_hash = hashlib.sha256(f.read()).hexdigest()
-                downloaded[package_id]['files'][filename] = computed_hash
-            continue
+    if not chosen_installer:
+        print(f"Skipping {package_id} — no x64/x86 installer with URL")
+        return False
 
+    # Proceed with download
+    url = chosen_installer["InstallerUrl"]
+    sha256 = chosen_installer.get("InstallerSha256")
+    filename = Path(url).name
+    filepath = download_dir / filename
+
+    if filepath.exists():
+        if filename not in downloaded[package_id]['files']:
+            with open(filepath, 'rb') as f:
+                computed_hash = hashlib.sha256(f.read()).hexdigest()
+            downloaded[package_id]['files'][filename] = computed_hash
+    else:
         downloaded_new = True
         print(f"Downloading {url} to {filepath}")
         response = requests.get(url, stream=True)
@@ -164,15 +178,14 @@ def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo):
                 size = f.write(data)
                 bar.update(size)
 
-        # Validate hash
         with open(filepath, 'rb') as f:
             computed_hash = hashlib.sha256(f.read()).hexdigest()
 
         if sha256 and computed_hash != sha256.lower():
             print(f"Warning: Hash mismatch for {filepath}, expected {sha256}, got {computed_hash}")
-            # Still add the file to allow the mirror to work
 
         downloaded[package_id]['files'][filename] = computed_hash
+
 
     # Set timestamp after processing all installers
     if downloaded[package_id]['files']:
