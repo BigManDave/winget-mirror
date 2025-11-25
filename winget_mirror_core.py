@@ -71,8 +71,8 @@ def get_matching_publishers(mirror_dir, publisher):
 
     return matching
 
-def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo):
-    """Process a single package: find latest version, download if needed, update state."""
+def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo, version_filter=None):
+    """Process a single package: find version (latest or explicit), download if needed, update state."""
     try:
         pub, pkg = package_id.split('.', 1)
     except ValueError:
@@ -89,10 +89,6 @@ def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo):
         return False
 
     versions = [p.name for p in package_path.iterdir() if p.is_dir()]
-    if not versions:
-        return False
-
-    # Filter out invalid version strings
     valid_versions = []
     for v in versions:
         try:
@@ -104,20 +100,23 @@ def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo):
     if not valid_versions:
         return False
 
-    latest_version = max(valid_versions, key=parse_version_safe)
-    yaml_path = package_path / latest_version / f'{pub}.{pkg}.yaml'
+    # Explicit version support
+    if version_filter:
+        if version_filter not in valid_versions:
+            print(f"Requested version {version_filter} not found for {package_id}")
+            return False
+        target_version = version_filter
+    else:
+        target_version = max(valid_versions, key=parse_version_safe)
+
+    yaml_path = package_path / target_version / f'{pub}.{pkg}.yaml'
     if not yaml_path.exists():
         return False
 
     with open(yaml_path) as f:
         manifest = yaml.safe_load(f)
 
-    if 'ManifestVersion' not in manifest or version.parse(manifest['ManifestVersion']) < version.parse('1.0.0'):
-        print(f"Skipping {pkg} due to unsupported ManifestVersion {manifest.get('ManifestVersion')}")
-        return False
-
-    # Load installers from separate file if it exists (for split manifests)
-    installer_yaml_path = package_path / latest_version / f'{pub}.{pkg}.installer.yaml'
+    installer_yaml_path = package_path / target_version / f'{pub}.{pkg}.installer.yaml'
     if installer_yaml_path.exists():
         with open(installer_yaml_path) as f:
             installer_manifest = yaml.safe_load(f)
@@ -125,13 +124,12 @@ def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo):
     else:
         installers = manifest.get('Installers', [])
 
-    download_dir = downloads_dir / pub / pkg / latest_version
+    download_dir = downloads_dir / pub / pkg / target_version
     download_dir.mkdir(parents=True, exist_ok=True)
 
-    # Initialize package entry if not exists
     if package_id not in downloaded:
         downloaded[package_id] = {
-            'version': latest_version,
+            'version': target_version,
             'git_rev': repo.head.commit.hexsha,
             'files': {},
             'timestamp': None
@@ -436,10 +434,10 @@ class WingetPackage:
 
         return max(valid_versions, key=parse_version_safe)
 
-    def download(self):
+    def download(self, version=None):
         """Download the latest version of this package."""
         downloaded = self.manager.state.setdefault('downloads', {})
-        return process_package(self.package_id, self.manager.mirror_dir, self.manager.downloads_dir, downloaded, self.manager.repo)
+        return process_package(self.package_id, self.manager.mirror_dir, self.manager.downloads_dir, downloaded, self.manager.repo, version_filter=version)
 
     def validate_hashes(self):
         """Validate SHA256 hashes of downloaded files for this package."""

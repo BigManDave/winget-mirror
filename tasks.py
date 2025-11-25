@@ -33,18 +33,20 @@ def init(c, path):
     WingetMirrorManager.initialize(path)
 
 @task
-def sync(c, publisher):
+def sync(c, publisher, version=None):
     """Download the latest version of packages matching the publisher/package filter from the already synced repository.
 
     Downloads the latest version of packages matching the publisher/package filter.
+    Optionally specify a version (e.g. --version 1.2.3).
     The repository must be synced first using 'invoke sync-repo'.
 
     Args:
-        publisher: Publisher filter, optionally with package filter (e.g., 'Microsoft' or 'Splunk/ACS').
+        publisher: Publisher filter, optionally with package filter and --version
 
     Example:
         invoke sync Microsoft
         invoke sync Splunk/ACS
+        invoke sync Spotify/Spotify --version 1.2.3
     """
     manager = WingetMirrorManager()
     if manager.repo is None:
@@ -77,7 +79,7 @@ def sync(c, publisher):
 
             package_id = f'{pub}.{package_path.name}'
             pkg = manager.get_package(package_id)
-            if pkg.download():
+            if pkg.download(version=version):   # pass version down
                 processed_packages.add(package_id)
 
     # Update state
