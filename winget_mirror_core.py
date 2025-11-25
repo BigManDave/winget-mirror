@@ -169,8 +169,16 @@ def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo):
     else:
         downloaded_new = True
         print(f"Downloading {url} to {filepath}")
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
+        try:
+            response = requests.get(url, stream=True)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            print(f"Skipping {package_id} — HTTP error: {e}")
+            return False
+        except requests.exceptions.RequestException as e:
+            print(f"Skipping {package_id} — Request failed: {e}")
+            return False
+
         total_size = int(response.headers.get('content-length', 0))
 
         with open(filepath, 'wb') as f, tqdm(
@@ -191,6 +199,7 @@ def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo):
             print(f"Warning: Hash mismatch for {filepath}, expected {sha256}, got {computed_hash}")
 
         downloaded[package_id]['files'][filename] = computed_hash
+
 
 
     # Set timestamp after processing all installers
