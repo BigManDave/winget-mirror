@@ -2,6 +2,7 @@ import json
 import datetime
 import sys
 import os
+import shutil
 from invoke import task
 
 # Add current directory to path for imports
