@@ -218,7 +218,8 @@ class WingetMirrorManager:
         "repo_url": "https://github.com/microsoft/winget-pkgs",
         "revision": "master",
         "mirror_dir": "mirror",
-        "server_url": None,
+        "patch_dir": "patched-manifests",
+        "server_url": "https://localhost/winget",
         "cleanup": {
             "max_unpinned_versions": 5,
             "max_unpinned_age_months": 6
@@ -346,18 +347,23 @@ class WingetMirrorManager:
         self.repo = repo
         return repo
 
-    def patch_repo(self, server_url, output_dir):
-        """Create patched manifests with corrected InstallerURL paths for downloaded packages.
+    def patch_repo(self, server_url=None, patch_dir=None):
+        """Create patched manifests with corrected InstallerURL paths.
 
-        Iterates over all downloaded packages and their versions in state.json,
-        copies manifest files to the output directory, and patches InstallerURL
-        to point to the local mirror's downloads folder served by server_url.
+        Uses server_url and patch_dir from config.json if not provided.
         """
         if not self.state.get("downloads"):
             print("No downloaded packages found in state.json")
             return 0
 
-        output_path = Path(output_dir)
+        # Resolve config defaults
+        server_url = server_url or self.config.get("server_url")
+        patch_dir = patch_dir or self.config.get("patch_dir")
+        if not server_url or not patch_dir:
+            print("Error: server_url and patch_dir must be set in config or passed explicitly")
+            return 0
+
+        output_path = Path(patch_dir)
         output_path.mkdir(parents=True, exist_ok=True)
 
         patched_count = 0
@@ -367,28 +373,21 @@ class WingetMirrorManager:
             versions = package_info.get("versions", {})
 
             for version, vdata in versions.items():
-                # Source manifest directory
                 first_letter = pub[0].lower()
                 source_manifest_dir = (
                     self.mirror_dir / "manifests" / first_letter / pub / pkg / version
                 )
-
                 if not source_manifest_dir.exists():
-                    print(
-                        f"Warning: Source manifest directory not found for {package_id} {version}: {source_manifest_dir}"
-                    )
+                    print(f"Warning: Source manifest not found for {package_id} {version}")
                     continue
 
-                # Target manifest directory
                 target_manifest_dir = (
                     output_path / "manifests" / first_letter / pub / pkg / version
                 )
                 target_manifest_dir.mkdir(parents=True, exist_ok=True)
 
-                # Copy and patch manifest files
                 for manifest_file in source_manifest_dir.glob("*.yaml"):
                     target_file = target_manifest_dir / manifest_file.name
-
                     with open(manifest_file) as f:
                         manifest = yaml.safe_load(f)
 
@@ -397,13 +396,9 @@ class WingetMirrorManager:
                             if "InstallerUrl" in installer:
                                 original_url = installer["InstallerUrl"]
                                 filename = Path(original_url).name
-                                new_url = (
-                                    f"{server_url.rstrip('/')}/downloads/{pub}/{pkg}/{version}/{filename}"
-                                )
+                                new_url = f"{server_url.rstrip('/')}/downloads/{pub}/{pkg}/{version}/{filename}"
                                 installer["InstallerUrl"] = new_url
-                                print(
-                                    f"Patched {package_id} {version}: {original_url} -> {new_url}"
-                                )
+                                print(f"Patched {package_id} {version}: {original_url} -> {new_url}")
 
                     with open(target_file, "w") as f:
                         yaml.dump(manifest, f, default_flow_style=False, sort_keys=False)
@@ -413,7 +408,6 @@ class WingetMirrorManager:
 
         print(f"Successfully patched {patched_count} package versions")
         return patched_count
-
 
 class WingetPackage:
     def __init__(self, manager, package_id):

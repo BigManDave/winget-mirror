@@ -422,7 +422,7 @@ def search(c, target):
         print(f"{pkg_id:<{max_pkg_len}}  {status:<{max_status_len}}  {ver:<10}  {ts:<17}")
 
 @task
-def patch_repo(c, server_url, output_dir):
+def patch_repo(c, server_url, patch_dir):
     """Create patched manifests with corrected InstallerURL paths for downloaded packages.
 
     Copies manifest files for all downloaded packages to the output directory,
@@ -433,7 +433,7 @@ def patch_repo(c, server_url, output_dir):
 
     Args:
         server_url: Base server URL where downloads will be served (e.g., 'https://mirror.example.com')
-        output_dir: Directory to output the patched manifests
+        patch_dir: Directory to output the patched manifests
 
     Example:
         invoke patch-repo --server-url="https://mirror.example.com" --output-dir="./patched-manifests"
@@ -459,8 +459,8 @@ def patch_repo(c, server_url, output_dir):
         print("No downloaded packages found in state.json. Run 'invoke sync' first.")
         return
 
-    manager.patch_repo(server_url, output_dir)
-    print(f"Patched manifests created in {output_dir}")
+    manager.patch_repo(server_url, patch_dir)
+    print(f"Patched manifests created in {patch_dir}")
 
 @task
 def cleanup(c, dry_run=False):
