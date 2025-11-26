@@ -464,13 +464,10 @@ def patch_repo(c, server_url, patch_dir):
 
 @task
 def cleanup(c, dry_run=False):
-    """Cleanup old unpinned versions based on config.json thresholds.
-
-    If dry_run=True, only report what would be deleted.
-    """
+    """Cleanup old unpinned versions based on config.json thresholds."""
     manager = WingetMirrorManager()
     cfg = manager.config.get("cleanup", {})
-    max_versions = cfg.get("max_unpinned_versions", 5)
+    max_versions = cfg.get("max_unpinned_versions", 3)
     max_age_months = cfg.get("max_unpinned_age_months", 6)
 
     now = datetime.datetime.now()
@@ -488,35 +485,27 @@ def cleanup(c, dry_run=False):
         # Sort by timestamp
         unpinned.sort(key=lambda item: parse_version_safe(item[0]))
 
-        # Apply max_versions rule
+        # Apply thresholds
         to_delete = []
         if len(unpinned) > max_versions:
             to_delete.extend(unpinned[:-max_versions])
 
-        # Apply max_age rule
         for v, vdata in unpinned:
             ts = datetime.datetime.fromisoformat(vdata.get("timestamp"))
             age_months = (now.year - ts.year) * 12 + (now.month - ts.month)
             if age_months > max_age_months and (v, vdata) not in to_delete:
                 to_delete.append((v, vdata))
 
-        # Report or delete
+        # Delete selected versions
+        pkg = manager.get_package(package_id)
         for v, _ in to_delete:
             if dry_run:
                 print(f"[DRY RUN] Would clean {package_id} {v}")
             else:
-                download_dir = manager.downloads_dir / package_id.split(".", 1)[0] / package_id.split(".", 1)[1] / v
-                if download_dir.exists():
-                    shutil.rmtree(download_dir)
-                del versions[v]
-                cleaned_count += 1
-                print(f"Cleaned {package_id} {v}")
-
-        if not versions and not dry_run:
-            del manager.state["downloads"][package_id]
+                if pkg.purge(version=v):
+                    cleaned_count += 1
 
     if not dry_run:
-        manager.save_state()
         print(f"Cleanup removed {cleaned_count} version(s)")
     else:
         print("Dry run complete — no changes made.")

@@ -507,12 +507,12 @@ class WingetPackage:
         return results
 
     def purge(self, version=None):
-        """Purge downloaded files and state for this package.
+        """Purge downloaded files, state, and patched manifests for this package.
 
         If version is given, purge only that version.
         Otherwise purge all versions.
         """
-        package_info = self.manager.state.get('downloads', {}).get(self.package_id)
+        package_info = self.manager.state.get("downloads", {}).get(self.package_id)
         if not package_info:
             return False
 
@@ -525,26 +525,26 @@ class WingetPackage:
             if version and v != version:
                 continue
 
+            # Remove downloads
             package_dir = self.manager.downloads_dir / self.pub / self.pkg / v
             if package_dir.exists():
                 shutil.rmtree(package_dir)
-                try:
-                    pkg_dir = package_dir.parent
-                    if pkg_dir.exists() and not any(pkg_dir.iterdir()):
-                        pkg_dir.rmdir()
-                        pub_dir = pkg_dir.parent
-                        if pub_dir.exists() and not any(pub_dir.iterdir()):
-                            pub_dir.rmdir()
-                except OSError:
-                    pass
 
+            # Remove patched manifests
+            patched_root = Path(self.manager.config.get("patched_dir", "patched-manifests"))
+            patched_dir = patched_root / "manifests" / self.pub[0].lower() / self.pub / self.pkg / v
+            if patched_dir.exists():
+                shutil.rmtree(patched_dir)
+                print(f"Removed patched manifests for {self.package_id} {v}")
+
+            # Remove from state
             del versions[v]
             purged_any = True
             print(f"Purged {self.package_id} {v}")
 
         # If no versions left, remove package entry entirely
         if not versions:
-            del self.manager.state['downloads'][self.package_id]
+            del self.manager.state["downloads"][self.package_id]
 
         if purged_any:
             self.manager.save_state()
