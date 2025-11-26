@@ -35,7 +35,6 @@ def parse_version_safe(v):
         fallback_str = '.'.join(str(p) for p in parts)
         return Version(fallback_str)
 
-
 def load_config_and_state():
     """Load and return config and state from files, or None if not found."""
     config_path = Path('config.json')
@@ -135,7 +134,8 @@ def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo, ver
     downloaded[package_id]['versions'][target_version] = {
         'git_rev': repo.head.commit.hexsha,
         'files': {},
-        'timestamp': datetime.datetime.now().isoformat()
+        'timestamp': datetime.datetime.now().isoformat(),
+        'pinned': bool(version_filter)  # True if user passed --version
     }
 
     downloaded_new = False

@@ -94,10 +94,8 @@ def refresh_synced(c):
     """Refresh all synced packages to their latest versions.
 
     Checks each package in state.json for newer versions in the repository
-    and downloads/updates them if available. The repository must be synced first.
-
-    Example:
-        invoke refresh-synced
+    and downloads/updates them if available. Leaves pinned versions untouched.
+    The repository must be synced first.
     """
     manager = WingetMirrorManager()
     if manager.repo is None:
@@ -107,14 +105,26 @@ def refresh_synced(c):
     updated_packages = set()
 
     for package_id, package_info in manager.state.get('downloads', {}).items():
-        current_version = package_info['version']
+        versions = package_info.get("versions", {})
+        if not versions:
+            continue
+
+        # Find the latest non-pinned version we have
+        non_pinned_versions = [
+            v for v, vdata in versions.items() if not vdata.get("pinned")
+        ]
+        if not non_pinned_versions:
+            print(f"{package_id} has only pinned versions, skipping refresh")
+            continue
+
+        current_version = max(non_pinned_versions, key=parse_version_safe)
 
         pkg = manager.get_package(package_id)
         latest_version = pkg.get_latest_version()
 
         if latest_version and parse_version_safe(latest_version) > parse_version_safe(current_version):
             print(f"Updating {package_id} from {current_version} to {latest_version}")
-            if pkg.download():
+            if pkg.download(version=latest_version):
                 updated_packages.add(package_id)
         else:
             print(f"{package_id} is up to date")
@@ -124,6 +134,7 @@ def refresh_synced(c):
     manager.save_state()
 
     print(f"Refreshed {len(updated_packages)} packages")
+
 
 @task
 def sync_repo(c):
@@ -215,7 +226,7 @@ def purge_package(c, publisher):
     """Purge downloaded packages matching the publisher filter.
 
     Removes downloaded files and state entries for packages matching the publisher.
-    Asks for confirmation before proceeding.
+    Leaves pinned versions intact. Asks for confirmation before proceeding.
 
     Args:
         publisher: Publisher filter (e.g., 'Microsoft', 'Spotify')
@@ -244,7 +255,7 @@ def purge_package(c, publisher):
         print(f"  - {pkg}")
 
     # Ask for confirmation
-    confirm = input("Are you sure you want to purge these packages? (yes/no) [no]: ").strip()
+    confirm = input("Are you sure you want to purge these packages (unpinned versions only)? (yes/no) [no]: ").strip()
     if not confirm:
         confirm = "no"
     if confirm.lower() not in ('yes', 'y'):
@@ -255,10 +266,30 @@ def purge_package(c, publisher):
     purged_count = 0
     for package_id in matching_packages:
         pkg = manager.get_package(package_id)
-        if pkg.purge():
-            purged_count += 1
+        package_info = manager.state['downloads'][package_id]
+        versions = package_info.get("versions", {})
 
-    print(f"Successfully purged {purged_count} package(s)")
+        for version, vdata in list(versions.items()):
+            if vdata.get("pinned"):
+                print(f"Skipping pinned version {package_id} {version}")
+                continue
+
+            # Remove files from disk
+            download_dir = manager.downloads_dir / pkg.publisher / pkg.package / version
+            if download_dir.exists():
+                shutil.rmtree(download_dir)
+
+            # Remove from state
+            del versions[version]
+            purged_count += 1
+            print(f"Purged {package_id} {version}")
+
+        # If no versions left, remove package entry entirely
+        if not versions:
+            del manager.state['downloads'][package_id]
+
+    manager.save_state()
+    print(f"Successfully purged {purged_count} version(s)")
 
 @task
 def purge_all_packages(c):
