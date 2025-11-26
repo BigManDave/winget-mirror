@@ -422,18 +422,26 @@ def search(c, target):
         print(f"{pkg_id:<{max_pkg_len}}  {status:<{max_status_len}}  {ver:<10}  {ts:<17}")
 
 @task
-def patch_repo(self, server_url=None, patch_dir=None):
-    """Create patched manifests with corrected InstallerURL paths.
+def patch_repo(c, server_url=None, patch_dir=None):
+    """Create patched manifests with corrected InstallerURL paths for downloaded packages.
 
-    Uses server_url and patch_dir from config.json if not provided.
+    Copies manifest files for all downloaded packages to the output directory,
+    preserving the same folder structure, and patches InstallerURL to point to
+    the local mirror's downloads folder served by the specified server URL.
+
+    This command must be run after downloading packages using 'invoke sync'.
+
+    Args:
+        server_url: Base server URL where downloads will be served (e.g., 'https://mirror.example.com')
+        patch_dir: Directory to output the patched manifests
+
+    Example:
+        invoke patch-repo --server-url="https://mirror.example.com" --patch-dir="./patched-manifests"
     """
-    # Resolve config defaults
-    server_url = server_url or self.config.get("server_url")
-    patch_dir = patch_dir or self.config.get("patch_dir")
-
-    if not server_url or not patch_dir:
-        print("Error: server_url and patch_dir must be set in config or passed explicitly")
-        return 0
+    # Validate server URL
+    if not server_url.startswith(('http://', 'https://')):
+        print("Error: server_url must start with http:// or https://")
+        return
 
     try:
         from urllib.parse import urlparse
@@ -451,7 +459,7 @@ def patch_repo(self, server_url=None, patch_dir=None):
         print("No downloaded packages found in state.json. Run 'invoke sync' first.")
         return
 
-    manager.patch_repo(server_url, patch_dir)
+    manager.patch_repo(server_url=server_url, patch_dir=patch_dir)
     print(f"Patched manifests created in {patch_dir}")
 
 @task
