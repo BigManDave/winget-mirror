@@ -222,17 +222,18 @@ def validate_hash(c, output=None):
 
 
 @task
-def purge_package(c, publisher):
-    """Purge downloaded packages matching the publisher filter.
-
-    Removes downloaded files and state entries for packages matching the publisher.
-    Leaves pinned versions intact. Asks for confirmation before proceeding.
+def purge_package(c, target, version=None):
+    """Purge downloaded packages.
 
     Args:
-        publisher: Publisher filter (e.g., 'Microsoft', 'Spotify')
+        target: Publisher filter (e.g., 'Microsoft'),
+                or Publisher/Package (e.g., 'Microsoft/Teams')
+        version: Optional version string (e.g., '1.2.3')
 
-    Example:
+    Examples:
         invoke purge-package Microsoft
+        invoke purge-package Microsoft/Teams
+        invoke purge-package Microsoft/Teams --version=1.2.3
     """
     manager = WingetMirrorManager()
 
@@ -240,49 +241,56 @@ def purge_package(c, publisher):
         print("No downloaded packages found in state.json")
         return
 
-    # Find matching packages
-    matching_packages = [
-        package_id for package_id in manager.state['downloads']
-        if package_id.split('.', 1)[0].lower().startswith(publisher.lower())
-    ]
+    # Parse target
+    if '/' in target:
+        publisher, package = target.split('/', 1)
+        matching_packages = [
+            f"{publisher}.{package}"
+        ] if f"{publisher}.{package}" in manager.state['downloads'] else []
+    else:
+        publisher = target
+        matching_packages = [
+            pid for pid in manager.state['downloads']
+            if pid.split('.', 1)[0].lower().startswith(publisher.lower())
+        ]
 
     if not matching_packages:
-        print(f"No packages found matching publisher '{publisher}'")
+        print(f"No packages found matching '{target}'")
         return
 
-    print(f"Found {len(matching_packages)} package(s) matching '{publisher}':")
+    print(f"Found {len(matching_packages)} package(s) matching '{target}':")
     for pkg in matching_packages:
         print(f"  - {pkg}")
 
     # Ask for confirmation
-    confirm = input("Are you sure you want to purge these packages (unpinned versions only)? (yes/no) [no]: ").strip()
+    confirm = input("Are you sure you want to purge these packages (unpinned only)? (yes/no) [no]: ").strip()
     if not confirm:
         confirm = "no"
     if confirm.lower() not in ('yes', 'y'):
         print("Purge cancelled.")
         return
 
-    # Purge
     purged_count = 0
     for package_id in matching_packages:
-        pkg = manager.get_package(package_id)
         package_info = manager.state['downloads'][package_id]
         versions = package_info.get("versions", {})
 
-        for version, vdata in list(versions.items()):
+        for v, vdata in list(versions.items()):
+            if version and v != version:
+                continue  # skip other versions if specific one requested
             if vdata.get("pinned"):
-                print(f"Skipping pinned version {package_id} {version}")
+                print(f"Skipping pinned version {package_id} {v}")
                 continue
 
             # Remove files from disk
-            download_dir = manager.downloads_dir / pkg.publisher / pkg.package / version
+            download_dir = manager.downloads_dir / package_id.split('.', 1)[0] / package_id.split('.', 1)[1] / v
             if download_dir.exists():
                 shutil.rmtree(download_dir)
 
             # Remove from state
-            del versions[version]
+            del versions[v]
             purged_count += 1
-            print(f"Purged {package_id} {version}")
+            print(f"Purged {package_id} {v}")
 
         # If no versions left, remove package entry entirely
         if not versions:

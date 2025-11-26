@@ -506,36 +506,49 @@ class WingetPackage:
 
         return results
 
-    def purge(self):
-        """Purge downloaded files and state for this package."""
+    def purge(self, version=None):
+        """Purge downloaded files and state for this package.
+
+        If version is given, purge only that version.
+        Otherwise purge all versions.
+        """
         package_info = self.manager.state.get('downloads', {}).get(self.package_id)
         if not package_info:
             return False
 
-        version = package_info['version']
-        package_dir = self.manager.downloads_dir / self.pub / self.pkg / version
+        versions = package_info.get("versions", {})
+        if not versions:
+            return False
 
-        # Remove files
-        if package_dir.exists():
-            shutil.rmtree(package_dir)
+        purged_any = False
+        for v in list(versions.keys()):
+            if version and v != version:
+                continue
 
-            # Remove empty parent directories
-            try:
-                pkg_dir = package_dir.parent  # downloads/pub/pkg
-                if pkg_dir.exists() and not any(pkg_dir.iterdir()):
-                    pkg_dir.rmdir()
-                    pub_dir = pkg_dir.parent  # downloads/pub
-                    if pub_dir.exists() and not any(pub_dir.iterdir()):
-                        pub_dir.rmdir()
-            except OSError:
-                pass  # Ignore if can't remove directories
+            package_dir = self.manager.downloads_dir / self.pub / self.pkg / v
+            if package_dir.exists():
+                shutil.rmtree(package_dir)
+                try:
+                    pkg_dir = package_dir.parent
+                    if pkg_dir.exists() and not any(pkg_dir.iterdir()):
+                        pkg_dir.rmdir()
+                        pub_dir = pkg_dir.parent
+                        if pub_dir.exists() and not any(pub_dir.iterdir()):
+                            pub_dir.rmdir()
+                except OSError:
+                    pass
 
-        # Remove from state
-        if self.package_id in self.manager.state.get('downloads', {}):
+            del versions[v]
+            purged_any = True
+            print(f"Purged {self.package_id} {v}")
+
+        # If no versions left, remove package entry entirely
+        if not versions:
             del self.manager.state['downloads'][self.package_id]
+
+        if purged_any:
             self.manager.save_state()
-            return True
-        return False
+        return purged_any
 
     def get_status(self):
         """Get the status of this package."""
