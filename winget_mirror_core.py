@@ -531,7 +531,7 @@ class WingetPackage:
                 shutil.rmtree(package_dir)
 
             # Remove patched manifests
-            patched_root = Path(self.manager.config.get("patched_dir", "patched-manifests"))
+            patched_root = Path(self.manager.config.get("patch_dir", "patched-manifests"))
             patched_dir = patched_root / "manifests" / self.pub[0].lower() / self.pub / self.pkg / v
             if patched_dir.exists():
                 shutil.rmtree(patched_dir)
