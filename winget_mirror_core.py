@@ -129,11 +129,14 @@ def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo, ver
 
     if package_id not in downloaded:
         downloaded[package_id] = {
-            'version': target_version,
-            'git_rev': repo.head.commit.hexsha,
-            'files': {},
-            'timestamp': None
+            'versions': {}
         }
+
+    downloaded[package_id]['versions'][target_version] = {
+        'git_rev': repo.head.commit.hexsha,
+        'files': {},
+        'timestamp': datetime.datetime.now().isoformat()
+    }
 
     downloaded_new = False
 
@@ -445,55 +448,59 @@ class WingetPackage:
         if not package_info:
             return {"valid": False, "error": "Package not in state"}
 
-        version = package_info['version']
-        expected_files = package_info.get('files', {})
+        results = {"valid": True, "versions": {}}
 
-        results = {
-            "valid": True,
-            "files": {},
-            "missing_files": [],
-            "unexpected_files": []
-        }
+        for version, vdata in package_info.get("versions", {}).items():
+            expected_files = vdata.get("files", {})
+            version_results = {
+                "valid": True,
+                "files": {},
+                "missing_files": [],
+                "unexpected_files": []
+            }
 
-        if not expected_files:
-            return results
+            if not expected_files:
+                results["versions"][version] = version_results
+                continue
 
-        download_dir = self.manager.downloads_dir / self.pub / self.pkg / version
-
-        if not download_dir.exists():
-            results["valid"] = False
-            return results
-
-        actual_files = {f.name: f for f in download_dir.iterdir() if f.is_file()}
-
-        # Check all expected files exist and have correct hashes
-        for filename, expected_hash in expected_files.items():
-            if filename not in actual_files:
-                results["missing_files"].append(filename)
+            download_dir = self.manager.downloads_dir / self.pub / self.pkg / version
+            if not download_dir.exists():
+                version_results["valid"] = False
+                results["versions"][version] = version_results
                 results["valid"] = False
                 continue
 
-            filepath = actual_files[filename]
-            with open(filepath, 'rb') as f:
-                computed_hash = hashlib.sha256(f.read()).hexdigest()
+            actual_files = {f.name: f for f in download_dir.iterdir() if f.is_file()}
 
-            match = computed_hash == expected_hash
-            status = "MATCH" if match else "MISMATCH"
-            results["files"][filename] = {
-                "status": status,
-                "expected": expected_hash,
-                "computed": computed_hash
-            }
+            for filename, expected_hash in expected_files.items():
+                if filename not in actual_files:
+                    version_results["missing_files"].append(filename)
+                    version_results["valid"] = False
+                    continue
 
-            if not match:
+                filepath = actual_files[filename]
+                with open(filepath, 'rb') as f:
+                    computed_hash = hashlib.sha256(f.read()).hexdigest()
+
+                match = computed_hash == expected_hash
+                status = "MATCH" if match else "MISMATCH"
+                version_results["files"][filename] = {
+                    "status": status,
+                    "expected": expected_hash,
+                    "computed": computed_hash
+                }
+                if not match:
+                    version_results["valid"] = False
+
+            expected_filenames = set(expected_files.keys())
+            actual_filenames = set(actual_files.keys())
+            unexpected = actual_filenames - expected_filenames
+            if unexpected:
+                version_results["unexpected_files"] = list(unexpected)
+
+            results["versions"][version] = version_results
+            if not version_results["valid"]:
                 results["valid"] = False
-
-        # Check for unexpected files
-        expected_filenames = set(expected_files.keys())
-        actual_filenames = set(actual_files.keys())
-        unexpected = actual_filenames - expected_filenames
-        if unexpected:
-            results["unexpected_files"] = list(unexpected)
 
         return results
 

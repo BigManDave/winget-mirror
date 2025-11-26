@@ -180,33 +180,35 @@ def validate_hash(c, output=None):
     else:
         # Print human-readable output
         for package_id, pkg_data in results["packages"].items():
-            if not pkg_data["files"] and not pkg_data["missing_files"]:
-                print(f"Warning: No files recorded for {package_id}")
-                continue
+            for version, vdata in pkg_data.get("versions", {}).items():
+                if not vdata["files"] and not vdata["missing_files"]:
+                    print(f"Warning: No files recorded for {package_id} {version}")
+                    continue
 
-            if not pkg_data["valid"] and not pkg_data["files"] and pkg_data["missing_files"]:
-                publisher, package = package_id.split('.', 1)
-                download_dir = manager.downloads_dir / publisher / package / manager.state['downloads'][package_id]['version']
-                print(f"Error: Download directory missing for {package_id}: {download_dir}")
-                continue
+                if not vdata["valid"] and not vdata["files"] and vdata["missing_files"]:
+                    publisher, package = package_id.split('.', 1)
+                    download_dir = manager.downloads_dir / publisher / package / version
+                    print(f"Error: Download directory missing for {package_id} {version}: {download_dir}")
+                    continue
 
-            for filename, file_data in pkg_data["files"].items():
-                status = file_data["status"]
-                print(f"Validating {package_id}/{filename}: {status}")
-                print(f"  Tracked hash: {file_data['expected']}")
-                print(f"  Computed hash: {file_data['computed']}")
+                for filename, file_data in vdata["files"].items():
+                    status = file_data["status"]
+                    print(f"Validating {package_id}/{version}/{filename}: {status}")
+                    print(f"  Tracked hash: {file_data['expected']}")
+                    print(f"  Computed hash: {file_data['computed']}")
 
-            for missing in pkg_data["missing_files"]:
-                print(f"Error: Expected file missing for {package_id}: {missing}")
+                for missing in vdata["missing_files"]:
+                    print(f"Error: Expected file missing for {package_id} {version}: {missing}")
 
-            for unexpected in pkg_data["unexpected_files"]:
-                print(f"Warning: Unexpected files in {package_id}: {unexpected}")
+                for unexpected in vdata["unexpected_files"]:
+                    print(f"Warning: Unexpected files in {package_id} {version}: {unexpected}")
 
         if results["all_valid"]:
             print("All downloaded files validated successfully!")
         else:
             print("Validation failed! Some files are missing or corrupted.")
             sys.exit(1)
+
 
 @task
 def purge_package(c, publisher):
