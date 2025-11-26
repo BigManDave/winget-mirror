@@ -349,18 +349,11 @@ class WingetMirrorManager:
     def patch_repo(self, server_url, output_dir):
         """Create patched manifests with corrected InstallerURL paths for downloaded packages.
 
-        Copies manifest files for all downloaded packages to the output directory,
-        preserving the same folder structure, and patches InstallerURL to point to
-        the local mirror's downloads folder served by the specified server URL.
-
-        Args:
-            server_url: Base server URL where downloads will be served (e.g., 'https://mirror.example.com')
-            output_dir: Directory to output the patched manifests
-
-        Returns:
-            int: Number of packages patched
+        Iterates over all downloaded packages and their versions in state.json,
+        copies manifest files to the output directory, and patches InstallerURL
+        to point to the local mirror's downloads folder served by server_url.
         """
-        if not self.state.get('downloads'):
+        if not self.state.get("downloads"):
             print("No downloaded packages found in state.json")
             return 0
 
@@ -369,49 +362,58 @@ class WingetMirrorManager:
 
         patched_count = 0
 
-        for package_id, package_info in self.state['downloads'].items():
-            pub, pkg = package_id.split('.', 1)
-            version = package_info['version']
+        for package_id, package_info in self.state["downloads"].items():
+            pub, pkg = package_id.split(".", 1)
+            versions = package_info.get("versions", {})
 
-            # Source manifest directory
-            first_letter = pub[0].lower()
-            source_manifest_dir = self.mirror_dir / 'manifests' / first_letter / pub / pkg / version
+            for version, vdata in versions.items():
+                # Source manifest directory
+                first_letter = pub[0].lower()
+                source_manifest_dir = (
+                    self.mirror_dir / "manifests" / first_letter / pub / pkg / version
+                )
 
-            if not source_manifest_dir.exists():
-                print(f"Warning: Source manifest directory not found for {package_id}: {source_manifest_dir}")
-                continue
+                if not source_manifest_dir.exists():
+                    print(
+                        f"Warning: Source manifest directory not found for {package_id} {version}: {source_manifest_dir}"
+                    )
+                    continue
 
-            # Target manifest directory
-            target_manifest_dir = output_path / 'manifests' / first_letter / pub / pkg / version
-            target_manifest_dir.mkdir(parents=True, exist_ok=True)
+                # Target manifest directory
+                target_manifest_dir = (
+                    output_path / "manifests" / first_letter / pub / pkg / version
+                )
+                target_manifest_dir.mkdir(parents=True, exist_ok=True)
 
-            # Copy and patch manifest files
-            for manifest_file in source_manifest_dir.glob('*.yaml'):
-                target_file = target_manifest_dir / manifest_file.name
+                # Copy and patch manifest files
+                for manifest_file in source_manifest_dir.glob("*.yaml"):
+                    target_file = target_manifest_dir / manifest_file.name
 
-                with open(manifest_file) as f:
-                    manifest = yaml.safe_load(f)
+                    with open(manifest_file) as f:
+                        manifest = yaml.safe_load(f)
 
-                # Patch installer URLs if this is an installer manifest
-                if manifest.get('ManifestType') == 'installer' and 'Installers' in manifest:
-                    for installer in manifest['Installers']:
-                        if 'InstallerUrl' in installer:
-                            original_url = installer['InstallerUrl']
-                            filename = Path(original_url).name
-                            # Construct new URL: server_url + /downloads/pub/pkg/version/filename
-                            new_url = f"{server_url.rstrip('/')}/downloads/{pub}/{pkg}/{version}/{filename}"
-                            installer['InstallerUrl'] = new_url
-                            print(f"Patched {package_id}: {original_url} -> {new_url}")
+                    if manifest.get("ManifestType") == "installer" and "Installers" in manifest:
+                        for installer in manifest["Installers"]:
+                            if "InstallerUrl" in installer:
+                                original_url = installer["InstallerUrl"]
+                                filename = Path(original_url).name
+                                new_url = (
+                                    f"{server_url.rstrip('/')}/downloads/{pub}/{pkg}/{version}/{filename}"
+                                )
+                                installer["InstallerUrl"] = new_url
+                                print(
+                                    f"Patched {package_id} {version}: {original_url} -> {new_url}"
+                                )
 
-                # Write patched manifest
-                with open(target_file, 'w') as f:
-                    yaml.dump(manifest, f, default_flow_style=False, sort_keys=False)
+                    with open(target_file, "w") as f:
+                        yaml.dump(manifest, f, default_flow_style=False, sort_keys=False)
 
-            patched_count += 1
-            print(f"Patched manifests for {package_id}")
+                patched_count += 1
+                print(f"Patched manifests for {package_id} {version}")
 
-        print(f"Successfully patched {patched_count} packages")
+        print(f"Successfully patched {patched_count} package versions")
         return patched_count
+
 
 class WingetPackage:
     def __init__(self, manager, package_id):
