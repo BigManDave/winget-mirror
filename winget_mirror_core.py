@@ -163,10 +163,11 @@ def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo, ver
     filepath = download_dir / filename
 
     if filepath.exists():
-        if filename not in downloaded[package_id]['files']:
+        if filename not in downloaded[package_id]['versions'][target_version]['files']:
             with open(filepath, 'rb') as f:
                 computed_hash = hashlib.sha256(f.read()).hexdigest()
-            downloaded[package_id]['files'][filename] = computed_hash
+            downloaded[package_id]['versions'][target_version]['files'][filename] = computed_hash
+
     else:
         downloaded_new = True
         print(f"Downloading {url} to {filepath}")
@@ -199,12 +200,13 @@ def process_package(package_id, mirror_dir, downloads_dir, downloaded, repo, ver
         if sha256 and computed_hash != sha256.lower():
             print(f"Warning: Hash mismatch for {filepath}, expected {sha256}, got {computed_hash}")
 
-        downloaded[package_id]['files'][filename] = computed_hash
+        downloaded[package_id]['versions'][target_version]['files'][filename] = computed_hash
+
 
 
 
     # Set timestamp after processing all installers
-    if downloaded[package_id]['files']:
+    if downloaded[package_id]['versions'][target_version]['files']:
         downloaded[package_id]['timestamp'] = datetime.datetime.now().isoformat()
         if not downloaded_new:
             print(f"Package {package_id} is already up to date")
