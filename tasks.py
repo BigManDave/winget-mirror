@@ -438,20 +438,20 @@ def patch_repo(c, server_url=None, patch_dir=None):
     Example:
         invoke patch-repo --server-url="https://mirror.example.com" --patch-dir="./patched-manifests"
     """
-    # Validate server URL
-    if not server_url.startswith(('http://', 'https://')):
-        print("Error: server_url must start with http:// or https://")
-        return
+    # # Validate server URL
+    # if not server_url.startswith(('http://', 'https://')):
+    #     print("Error: server_url must start with http:// or https://")
+    #     return
 
-    try:
-        from urllib.parse import urlparse
-        parsed = urlparse(server_url)
-        if not parsed.netloc:
-            print("Error: server_url must be a valid URL")
-            return
-    except ImportError:
-        print("Error: Unable to parse URL")
-        return
+    # try:
+    #     from urllib.parse import urlparse
+    #     parsed = urlparse(server_url)
+    #     if not parsed.netloc:
+    #         print("Error: server_url must be a valid URL")
+    #         return
+    # except ImportError:
+    #     print("Error: Unable to parse URL")
+    #     return
 
     manager = WingetMirrorManager()
 
