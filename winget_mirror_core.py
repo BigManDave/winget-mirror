@@ -218,7 +218,11 @@ class WingetMirrorManager:
         "repo_url": "https://github.com/microsoft/winget-pkgs",
         "revision": "master",
         "mirror_dir": "mirror",
-        "server_url": None
+        "server_url": None,
+        "cleanup": {
+            "max_unpinned_versions": 5,
+            "max_unpinned_age_months": 6
+        }
     }
 
     def __init__(self, config_path='config.json', state_path='state.json'):
