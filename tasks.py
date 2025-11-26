@@ -263,7 +263,7 @@ def purge_package(c, target, version=None):
         print(f"  - {pkg}")
 
     # Ask for confirmation
-    confirm = input("Are you sure you want to purge these packages (unpinned only)? (yes/no) [no]: ").strip()
+    confirm = input("Are you sure you want to purge these packages? (yes/no) [no]: ").strip()
     if not confirm:
         confirm = "no"
     if confirm.lower() not in ('yes', 'y'):
@@ -275,12 +275,9 @@ def purge_package(c, target, version=None):
         package_info = manager.state['downloads'][package_id]
         versions = package_info.get("versions", {})
 
-        for v, vdata in list(versions.items()):
+        for v in list(versions.keys()):
             if version and v != version:
                 continue  # skip other versions if specific one requested
-            if vdata.get("pinned"):
-                print(f"Skipping pinned version {package_id} {v}")
-                continue
 
             # Remove files from disk
             download_dir = manager.downloads_dir / package_id.split('.', 1)[0] / package_id.split('.', 1)[1] / v
@@ -298,6 +295,7 @@ def purge_package(c, target, version=None):
 
     manager.save_state()
     print(f"Successfully purged {purged_count} version(s)")
+
 
 @task
 def purge_all_packages(c):
