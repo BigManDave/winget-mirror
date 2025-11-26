@@ -341,15 +341,8 @@ def purge_all_packages(c):
 def search(c, target):
     """Search for packages matching publisher or publisher/package.
 
-    Lists packages from the repository matching the filter,
+    Lists all packages from the repository matching the filter,
     along with their download status and versions.
-
-    Args:
-        target: Publisher (e.g., 'Microsoft') or Publisher/Package (e.g., 'Microsoft/Teams')
-
-    Examples:
-        invoke search Microsoft
-        invoke search Microsoft/Teams
     """
     manager = WingetMirrorManager()
     if not manager.mirror_dir.exists():
@@ -357,17 +350,30 @@ def search(c, target):
         return
 
     downloads = manager.state.get("downloads", {})
+    manifests_dir = manager.mirror_dir / "manifests"
 
     # Parse target
     if "/" in target:
         publisher, package = target.split("/", 1)
-        found_packages = [f"{publisher}.{package}"] if f"{publisher}.{package}" in downloads else []
+        publishers = [publisher]
+        package_filter = package
     else:
-        publisher = target
-        found_packages = [
-            pid for pid in downloads
-            if pid.split(".", 1)[0].lower().startswith(publisher.lower())
-        ]
+        publishers = manager.get_matching_publishers(target)
+        package_filter = None
+
+    found_packages = []
+    for pub in publishers:
+        first_letter = pub[0].lower()
+        publisher_path = manifests_dir / first_letter / pub
+        if not publisher_path.exists():
+            continue
+        for package_path in publisher_path.iterdir():
+            if not package_path.is_dir():
+                continue
+            if package_filter and package_path.name.lower() != package_filter.lower():
+                continue
+            package_id = f"{pub}.{package_path.name}"
+            found_packages.append(package_id)
 
     if not found_packages:
         print(f"No packages found matching '{target}'")
@@ -379,6 +385,7 @@ def search(c, target):
     max_status_len = len("Status")
 
     for package_id in sorted(found_packages):
+        pub, pkg = package_id.split(".", 1)
         package_info = downloads.get(package_id, {})
         versions = package_info.get("versions", {})
 
@@ -395,8 +402,6 @@ def search(c, target):
             except Exception:
                 pass
 
-            # Check if files exist
-            pub, pkg = package_id.split(".", 1)
             download_dir = manager.downloads_dir / pub / pkg / v
             if download_dir.exists() and any(download_dir.iterdir()):
                 status = "Downloaded"
