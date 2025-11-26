@@ -244,6 +244,7 @@ class WingetMirrorManager:
 
         self.path = Path(self.state['path'])
         self.mirror_dir = self.path / self.config['mirror_dir']
+        self.patch_dir = self.path / self.config['patch_dir']
         self.downloads_dir = self.path / 'downloads'
         self.repo = Repo(self.mirror_dir) if self.mirror_dir.exists() else None
 
@@ -531,11 +532,12 @@ class WingetPackage:
                 shutil.rmtree(package_dir)
 
             # Remove patched manifests
-            patch_root = Path(self.manager.config.get("patch_dir", "patched-manifests"))
-            patch_dir = patch_root / "manifests" / self.pub[0].lower() / self.pub / self.pkg / v
+            patch_dir = self.manager.patch_dir / "manifests" / self.pub[0].lower() / self.pub / self.pkg / v
             if patch_dir.exists():
                 shutil.rmtree(patch_dir)
                 print(f"Removed patched manifests for {self.package_id} {v}")
+            else:
+                print(f"No patched manifests found for {self.package_id} {v}")
 
             # Remove from state
             del versions[v]

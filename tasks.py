@@ -460,7 +460,7 @@ def patch_repo(c, server_url=None, patch_dir=None):
         return
 
     manager.patch_repo(server_url=server_url, patch_dir=patch_dir)
-    print(f"Patched manifests created in {patch_dir}")
+    print(f"Patched manifests created")
 
 @task
 def cleanup(c, dry_run=False):
