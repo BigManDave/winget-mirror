@@ -2,7 +2,6 @@ import json
 import datetime
 import sys
 import os
-import shutil
 from invoke import task
 
 # Add current directory to path for imports
@@ -273,30 +272,22 @@ def purge_package(c, target, version=None):
 
     purged_count = 0
     for package_id in matching_packages:
-        package_info = manager.state['downloads'][package_id]
-        versions = package_info.get("versions", {})
+        pkg = manager.get_package(package_id)
+        if not pkg:
+            print(f"Warning: package object not found for {package_id}")
+            continue
 
-        for v in list(versions.keys()):
-            if version and v != version:
-                continue  # skip other versions if specific one requested
+        # If a specific version was requested, purge only that version
+        if version:
+            if pkg.purge(version=version):
+                purged_count += 1
+        else:
+            # Purge all versions for this package
+            if pkg.purge():
+                # pkg.purge() should return True if it removed at least one version
+                purged_count += 1
 
-            # Remove files from disk
-            download_dir = manager.downloads_dir / package_id.split('.', 1)[0] / package_id.split('.', 1)[1] / v
-            if download_dir.exists():
-                shutil.rmtree(download_dir)
-
-            # Remove from state
-            del versions[v]
-            purged_count += 1
-            print(f"Purged {package_id} {v}")
-
-        # If no versions left, remove package entry entirely
-        if not versions:
-            del manager.state['downloads'][package_id]
-
-    manager.save_state()
     print(f"Successfully purged {purged_count} version(s)")
-
 
 @task
 def purge_all_packages(c):
