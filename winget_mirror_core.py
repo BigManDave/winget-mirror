@@ -510,8 +510,7 @@ class WingetPackage:
     def purge(self, version=None):
         """Purge downloaded files, state, and patched manifests for this package.
 
-        If version is given, purge only that version.
-        Otherwise purge all versions.
+        If version is given, purge only that version; otherwise purge all versions.
         """
         package_info = self.manager.state.get("downloads", {}).get(self.package_id)
         if not package_info:
@@ -522,22 +521,48 @@ class WingetPackage:
             return False
 
         purged_any = False
+
+        # Resolve patch_dir to an absolute path for reliability
+        patch_root_cfg = self.manager.config.get("patch_dir", "patched-manifests")
+        patch_root = Path(patch_root_cfg)
+        if not patch_root.is_absolute():
+            # Prefer anchoring to the repo root or a known base; adjust as needed
+            base = getattr(self.manager, "repo_root", Path.cwd())
+            patch_root = (base / patch_root).resolve()
+
         for v in list(versions.keys()):
             if version and v != version:
                 continue
 
             # Remove downloads
-            package_dir = self.manager.downloads_dir / self.pub / self.pkg / v
+            package_dir = (self.manager.downloads_dir / self.pub / self.pkg / v)
             if package_dir.exists():
                 shutil.rmtree(package_dir)
+            print(f"Downloads removed (or not present): {package_dir}")
 
             # Remove patched manifests
-            patch_dir = self.manager.patch_dir / "manifests" / self.pub[0].lower() / self.pub / self.pkg / v
-            if patch_dir.exists():
-                shutil.rmtree(patch_dir)
+            first_letter = self.pub[0].lower()
+            patched_dir = patch_root / "manifests" / first_letter / self.pub / self.pkg / v
+            print(f"Attempting to remove patched manifests at: {patched_dir}")
+
+            if patched_dir.exists():
+                shutil.rmtree(patched_dir)
                 print(f"Removed patched manifests for {self.package_id} {v}")
             else:
-                print(f"No patched manifests found for {self.package_id} {v}")
+                # Extra diagnostics to spot mismatches
+                print("Patched manifests directory not found.")
+                print(f"Exists check — parent package dir: {(patch_root / 'manifests' / first_letter / self.pub / self.pkg)}")
+                print(f"Exists check — publisher dir: {(patch_root / 'manifests' / first_letter / self.pub)}")
+                print(f"Exists check — letter dir: {(patch_root / 'manifests' / first_letter)}")
+                # Optional: list nearby entries for visual confirmation
+                parent_pkg_dir = (patch_root / "manifests" / first_letter / self.pub / self.pkg)
+                if parent_pkg_dir.exists():
+                    try:
+                        print("Contents of package dir:")
+                        for child in parent_pkg_dir.iterdir():
+                            print(f"  - {child.name}")
+                    except Exception:
+                        pass
 
             # Remove from state
             del versions[v]
